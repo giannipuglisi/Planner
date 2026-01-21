@@ -1106,7 +1106,6 @@
         // 6. Copy the Client ID below
 
         const GOOGLE_CLIENT_ID = '996979014891-cik6odg0ad64ruugr61g4dk34h1nlh11.apps.googleusercontent.com';
-        const GOOGLE_API_KEY = 'YOUR_GOOGLE_API_KEY'; // Optional, for public calendar access
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
 
@@ -1225,7 +1224,6 @@
         async function initializeGapiClient() {
             try {
                 await gapi.client.init({
-                    apiKey: GOOGLE_API_KEY,
                     discoveryDocs: [DISCOVERY_DOC],
                 });
                 gapiInited = true;
