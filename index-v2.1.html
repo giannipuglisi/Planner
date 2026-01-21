@@ -16,9 +16,9 @@
     <!-- iOS Icons -->
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232196F3' width='100' height='100' rx='20'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>📅</text></svg>">
 
-    <!-- Google API -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://apis.google.com/js/api.js" async defer></script>
+    <!-- Google API with onload callbacks -->
+    <script src="https://accounts.google.com/gsi/client" async defer onload="gisLoaded()"></script>
+    <script src="https://apis.google.com/js/api.js" async defer onload="gapiLoaded()"></script>
 
     <style>
         :root {
@@ -311,7 +311,7 @@
         /* PWA Install Banner */
         .install-banner {
             position: fixed;
-            bottom: 0;
+            bottom: 50px;
             left: 0;
             right: 0;
             background: var(--bg-white);
@@ -360,7 +360,7 @@
 
         .container {
             position: relative;
-            height: calc(100vh - 95px);
+            height: calc(100vh - 145px);
             overflow: hidden;
             perspective: 1000px;
         }
@@ -452,7 +452,7 @@
 
         .swipe-indicator {
             position: fixed;
-            bottom: 6px;
+            bottom: 56px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
@@ -824,7 +824,7 @@
         /* Toast notifications */
         .toast {
             position: fixed;
-            bottom: 60px;
+            bottom: 100px;
             left: 50%;
             transform: translateX(-50%) translateY(100px);
             background: #333;
@@ -841,30 +841,113 @@
             transform: translateX(-50%) translateY(0);
             opacity: 1;
         }
+
+        /* Bottom Bar */
+        .bottom-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-white);
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 -2px 10px var(--shadow);
+            z-index: 1000;
+            gap: 10px;
+        }
+
+        .bottom-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .bottom-bar-user {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .bottom-bar-user img {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+        }
+
+        .bottom-bar-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .bottom-bar-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        .bottom-bar-btn.google-btn {
+            background: white;
+            color: #333;
+            border: 1px solid var(--border);
+        }
+
+        .bottom-bar-btn.google-btn:hover {
+            background: #f5f5f5;
+        }
+
+        .bottom-bar-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .bottom-bar-btn.logout-btn {
+            background: var(--bg-light);
+            color: var(--text-muted);
+        }
+
+        .bottom-bar-status {
+            font-size: 11px;
+            color: var(--text-light);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+
+        .status-dot.online {
+            background: #4CAF50;
+        }
+
+        .status-dot.syncing {
+            background: #FF9800;
+            animation: pulse 1s infinite;
+        }
+
+        .status-dot.error {
+            background: #f44336;
+        }
     </style>
 </head>
 <body>
-    <!-- Login Screen -->
-    <div class="login-screen" id="loginScreen">
-        <div class="login-logo">📅</div>
-        <div class="login-title">Planner v2.1</div>
-        <div class="login-subtitle">Sincronizza i tuoi eventi su tutti i dispositivi</div>
-
-        <button class="google-btn" onclick="signInWithGoogle()">
-            <svg viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Accedi con Google
-        </button>
-
-        <button class="offline-btn" onclick="useOfflineMode()">
-            Usa senza sincronizzazione
-        </button>
-    </div>
-
     <!-- Main App -->
     <div class="header">
         <div class="header-top">
@@ -873,10 +956,7 @@
                 Caricamento...
                 <span class="version-badge">v2.1</span>
             </div>
-            <div class="user-info" id="userInfo" style="display:none;">
-                <img class="user-avatar" id="userAvatar" src="" alt="">
-                <button class="header-btn" onclick="signOut()">Esci</button>
-            </div>
+            <button class="header-btn" onclick="manualSync()" id="syncBtn" style="display:none;">🔄</button>
             <button class="header-btn" onclick="toggleDarkMode()">🌙</button>
         </div>
         <div class="stats-bar">
@@ -884,7 +964,6 @@
             <div class="sync-status" id="syncStatus">
                 <span>⏳</span> <span id="syncText">Offline</span>
             </div>
-            <button class="header-btn" onclick="manualSync()" id="syncBtn" style="display:none;">🔄</button>
         </div>
         <div class="days-scroll" id="daysScroll"></div>
     </div>
@@ -899,6 +978,38 @@
         <div class="swipe-dot"></div>
         <div class="swipe-dot active"></div>
         <div class="swipe-dot"></div>
+    </div>
+
+    <!-- Bottom Bar with Login/Logout -->
+    <div class="bottom-bar" id="bottomBar">
+        <div class="bottom-bar-left">
+            <!-- Not logged in state -->
+            <div id="loginSection">
+                <button class="bottom-bar-btn google-btn" onclick="signInWithGoogle()">
+                    <svg viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    Accedi con Google
+                </button>
+            </div>
+            <!-- Logged in state -->
+            <div id="userSection" style="display: none;">
+                <div class="bottom-bar-user">
+                    <img id="userAvatar" src="" alt="">
+                    <span id="userName">Utente</span>
+                </div>
+            </div>
+        </div>
+        <div class="bottom-bar-status" id="apiStatus">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Caricamento API...</span>
+        </div>
+        <div id="logoutSection" style="display: none;">
+            <button class="bottom-bar-btn logout-btn" onclick="signOut()">Esci</button>
+        </div>
     </div>
 
     <!-- Event Modal -->
@@ -1099,7 +1210,15 @@
         }
 
         // ==================== GOOGLE AUTH ====================
+        function updateApiStatus(status, text) {
+            const dot = document.getElementById('statusDot');
+            const textEl = document.getElementById('statusText');
+            dot.className = 'status-dot ' + status;
+            textEl.textContent = text;
+        }
+
         function gapiLoaded() {
+            console.log('GAPI loaded');
             gapi.load('client', initializeGapiClient);
         }
 
@@ -1110,46 +1229,64 @@
                     discoveryDocs: [DISCOVERY_DOC],
                 });
                 gapiInited = true;
+                console.log('GAPI client initialized');
                 maybeEnableButtons();
             } catch (e) {
                 console.error('GAPI init error:', e);
+                updateApiStatus('error', 'Errore GAPI');
             }
         }
 
         function gisLoaded() {
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: GOOGLE_CLIENT_ID,
-                scope: SCOPES,
-                callback: '', // defined later
-            });
-            gisInited = true;
-            maybeEnableButtons();
+            console.log('GIS loaded');
+            try {
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: GOOGLE_CLIENT_ID,
+                    scope: SCOPES,
+                    callback: '', // defined later
+                });
+                gisInited = true;
+                console.log('GIS initialized');
+                maybeEnableButtons();
+            } catch (e) {
+                console.error('GIS init error:', e);
+                updateApiStatus('error', 'Errore GIS');
+            }
         }
 
         function maybeEnableButtons() {
-            // Check if we have a stored token
-            const storedToken = localStorage.getItem('google_token');
-            if (storedToken && gapiInited) {
-                gapi.client.setToken(JSON.parse(storedToken));
-                handleSignedIn();
+            // Update status based on API loading
+            if (gapiInited && gisInited) {
+                updateApiStatus('online', 'Pronto');
+
+                // Check if we have a stored token
+                const storedToken = localStorage.getItem('google_token');
+                if (storedToken) {
+                    try {
+                        gapi.client.setToken(JSON.parse(storedToken));
+                        handleSignedIn();
+                    } catch (e) {
+                        console.error('Token restore error:', e);
+                        localStorage.removeItem('google_token');
+                    }
+                }
+            } else if (gapiInited || gisInited) {
+                updateApiStatus('syncing', 'Caricamento...');
             }
         }
 
         function signInWithGoogle() {
             if (!gisInited || !gapiInited) {
                 showToast('Google API in caricamento...');
-
-                // If APIs not loaded yet, show instructions
-                if (GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
-                    alert('Per abilitare Google Sync:\n\n1. Vai su console.cloud.google.com\n2. Crea un progetto\n3. Abilita Google Calendar API\n4. Crea credenziali OAuth 2.0\n5. Sostituisci GOOGLE_CLIENT_ID nel codice\n\nPer ora usa la modalità offline.');
-                    return;
-                }
+                updateApiStatus('error', 'API non pronte');
                 return;
             }
 
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) {
+                    console.error('Auth error:', resp.error);
                     showToast('Errore di autenticazione');
+                    updateApiStatus('error', 'Errore auth');
                     return;
                 }
 
@@ -1168,7 +1305,11 @@
         function handleSignedIn() {
             isSignedIn = true;
             isOfflineMode = false;
-            document.getElementById('loginScreen').classList.add('hidden');
+
+            // Update bottom bar
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('userSection').style.display = 'block';
+            document.getElementById('logoutSection').style.display = 'block';
             document.getElementById('syncBtn').style.display = 'block';
 
             // Get user info
@@ -1187,8 +1328,8 @@
                 });
                 const user = await response.json();
 
-                document.getElementById('userInfo').style.display = 'flex';
                 document.getElementById('userAvatar').src = user.picture || '';
+                document.getElementById('userName').textContent = user.name || user.email || 'Utente';
 
                 localStorage.setItem('user_info', JSON.stringify(user));
             } catch (e) {
@@ -1197,29 +1338,30 @@
         }
 
         function signOut() {
-            const token = gapi.client.getToken();
-            if (token !== null) {
-                google.accounts.oauth2.revoke(token.access_token);
-                gapi.client.setToken('');
+            try {
+                const token = gapi.client.getToken();
+                if (token !== null) {
+                    google.accounts.oauth2.revoke(token.access_token);
+                    gapi.client.setToken('');
+                }
+            } catch (e) {
+                console.error('Sign out error:', e);
             }
 
             localStorage.removeItem('google_token');
             localStorage.removeItem('user_info');
 
             isSignedIn = false;
-            document.getElementById('loginScreen').classList.remove('hidden');
-            document.getElementById('userInfo').style.display = 'none';
-            document.getElementById('syncBtn').style.display = 'none';
-            updateSyncStatus('offline');
-        }
 
-        function useOfflineMode() {
-            isOfflineMode = true;
-            isSignedIn = false;
-            document.getElementById('loginScreen').classList.add('hidden');
+            // Update bottom bar
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('userSection').style.display = 'none';
+            document.getElementById('logoutSection').style.display = 'none';
+            document.getElementById('syncBtn').style.display = 'none';
+
             updateSyncStatus('offline');
-            showToast('Modalità offline attiva');
-            updateDisplay();
+            updateApiStatus('online', 'Pronto');
+            showToast('Disconnesso');
         }
 
         // ==================== GOOGLE CALENDAR SYNC ====================
@@ -1888,20 +2030,7 @@
         // ==================== INIT ====================
         // Load APIs
         window.onload = () => {
-            // Initialize GAPI
-            if (typeof gapi !== 'undefined') {
-                gapiLoaded();
-            }
-
-            // Initialize GIS
-            if (typeof google !== 'undefined' && google.accounts) {
-                gisLoaded();
-            }
-
-            // Check for offline mode preference
-            if (localStorage.getItem('offline_mode') === 'true') {
-                useOfflineMode();
-            }
+            updateDisplay();
 
             // Register Service Worker
             if ('serviceWorker' in navigator) {
@@ -1910,8 +2039,26 @@
                     .catch(err => console.log('Service Worker registration failed:', err));
             }
 
-            updateDisplay();
+            // Set timeout for API loading
+            setTimeout(() => {
+                if (!gapiInited || !gisInited) {
+                    console.warn('Google APIs not loaded after timeout');
+                    updateApiStatus('error', 'API non caricate');
+                }
+            }, 10000);
+
+            // Try to initialize APIs if they loaded before onload
+            if (typeof gapi !== 'undefined' && !gapiInited) {
+                gapiLoaded();
+            }
+            if (typeof google !== 'undefined' && google.accounts && !gisInited) {
+                gisLoaded();
+            }
         };
+
+        // Expose functions globally for script onload
+        window.gapiLoaded = gapiLoaded;
+        window.gisLoaded = gisLoaded;
     </script>
 </body>
 </html>
