@@ -6,8 +6,15 @@
     <meta name="theme-color" content="#2196F3">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Planner">
+    <meta name="description" content="Organizzatore settimanale con sincronizzazione Google Calendar">
     <title>Organizzatore Settimanale v2.1 - Google Sync</title>
-    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIk9yZ2FuaXp6YXRvcmUgdjIuMSIsCiAgInNob3J0X25hbWUiOiAiUGxhbm5lciIsCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjZmZmZmZmIiwKICAidGhlbWVfY29sb3IiOiAiIzIxOTZGMyIKfQ==">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- iOS Icons -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%232196F3' width='100' height='100' rx='20'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>📅</text></svg>">
 
     <!-- Google API -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -285,8 +292,70 @@
             box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.3);
         }
 
+        .day-chip.holiday {
+            background: rgba(244, 67, 54, 0.8);
+            border-color: #f44336;
+            color: white;
+        }
+
+        .day-chip.holiday.active {
+            background: #f44336;
+            color: white;
+            border-color: #f44336;
+        }
+
         .day-chip:active {
             transform: scale(0.95);
+        }
+
+        /* PWA Install Banner */
+        .install-banner {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-white);
+            padding: 12px 16px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 -4px 12px var(--shadow);
+            z-index: 5000;
+        }
+
+        .install-banner.show {
+            display: flex;
+        }
+
+        .install-banner-text {
+            flex: 1;
+            font-size: 13px;
+            color: var(--text-dark);
+        }
+
+        .install-banner-text strong {
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .install-banner-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .install-banner-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 4px;
         }
 
         .container {
@@ -883,6 +952,10 @@
                     <input type="checkbox" id="repeatWeekly">
                     <span>📆 Ripeti ogni settimana</span>
                 </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="repeatMonthly">
+                    <span>🗓️ Ripeti ogni mese</span>
+                </label>
             </div>
 
             <div class="modal-buttons">
@@ -900,6 +973,16 @@
 
     <!-- Toast -->
     <div class="toast" id="toast"></div>
+
+    <!-- PWA Install Banner -->
+    <div class="install-banner" id="installBanner">
+        <div class="install-banner-text">
+            <strong>📅 Installa Planner</strong>
+            Aggiungi alla schermata home per accesso rapido
+        </div>
+        <button class="install-banner-btn" onclick="installPWA()">Installa</button>
+        <button class="install-banner-close" onclick="dismissInstallBanner()">×</button>
+    </div>
 
     <script>
         // ==================== CONFIGURATION ====================
@@ -929,9 +1012,79 @@
         let gapiInited = false;
         let gisInited = false;
 
+        // PWA Install prompt
+        let deferredPrompt = null;
+
         // Cache for Google Calendar events
         let googleEventsCache = {};
         let lastSyncTime = null;
+
+        // ==================== ITALIAN HOLIDAYS ====================
+        // Fixed holidays (month is 0-indexed)
+        const FIXED_HOLIDAYS = [
+            { month: 0, day: 1, name: 'Capodanno' },
+            { month: 0, day: 6, name: 'Epifania' },
+            { month: 3, day: 25, name: 'Festa della Liberazione' },
+            { month: 4, day: 1, name: 'Festa dei Lavoratori' },
+            { month: 5, day: 2, name: 'Festa della Repubblica' },
+            { month: 7, day: 15, name: 'Ferragosto' },
+            { month: 10, day: 1, name: 'Tutti i Santi' },
+            { month: 11, day: 8, name: 'Immacolata Concezione' },
+            { month: 11, day: 25, name: 'Natale' },
+            { month: 11, day: 26, name: 'Santo Stefano' }
+        ];
+
+        // Calculate Easter and related holidays
+        function getEasterDate(year) {
+            const a = year % 19;
+            const b = Math.floor(year / 100);
+            const c = year % 100;
+            const d = Math.floor(b / 4);
+            const e = b % 4;
+            const f = Math.floor((b + 8) / 25);
+            const g = Math.floor((b - f + 1) / 3);
+            const h = (19 * a + b - d - g + 15) % 30;
+            const i = Math.floor(c / 4);
+            const k = c % 4;
+            const l = (32 + 2 * e + 2 * i - h - k) % 7;
+            const m = Math.floor((a + 11 * h + 22 * l) / 451);
+            const month = Math.floor((h + l - 7 * m + 114) / 31) - 1;
+            const day = ((h + l - 7 * m + 114) % 31) + 1;
+            return new Date(year, month, day);
+        }
+
+        function isItalianHoliday(date) {
+            const year = date.getFullYear();
+            const month = date.getMonth();
+            const day = date.getDate();
+            const dayOfWeek = date.getDay();
+
+            // Check fixed holidays
+            for (const holiday of FIXED_HOLIDAYS) {
+                if (holiday.month === month && holiday.day === day) {
+                    return holiday.name;
+                }
+            }
+
+            // Check Easter and Pasquetta
+            const easter = getEasterDate(year);
+            if (date.toDateString() === easter.toDateString()) {
+                return 'Pasqua';
+            }
+
+            const pasquetta = new Date(easter);
+            pasquetta.setDate(pasquetta.getDate() + 1);
+            if (date.toDateString() === pasquetta.toDateString()) {
+                return 'Pasquetta';
+            }
+
+            // Sunday is also "festivo"
+            if (dayOfWeek === 0) {
+                return 'Domenica';
+            }
+
+            return null;
+        }
 
         const container = document.getElementById('container');
         const currentDayEl = document.getElementById('currentDay');
@@ -1169,6 +1322,8 @@
                 event.recurrence = ['RRULE:FREQ=DAILY'];
             } else if (eventData.repeatWeekly) {
                 event.recurrence = ['RRULE:FREQ=WEEKLY'];
+            } else if (eventData.repeatMonthly) {
+                event.recurrence = ['RRULE:FREQ=MONTHLY'];
             }
 
             try {
@@ -1451,9 +1606,13 @@
                 const dayEvents = getEvents(date);
                 const hasEvents = Object.values(dayEvents).some(e => e && e.title);
 
+                const holidayName = isItalianHoliday(date);
+                const isHoliday = holidayName !== null;
+
                 html += `
-                    <div class="day-chip ${isActive ? 'active' : ''} ${hasEvents ? 'has-events' : ''}"
-                         onclick="jumpToDate('${date.toISOString()}')">
+                    <div class="day-chip ${isActive ? 'active' : ''} ${hasEvents ? 'has-events' : ''} ${isHoliday ? 'holiday' : ''}"
+                         onclick="jumpToDate('${date.toISOString()}')"
+                         ${isHoliday ? `title="${holidayName}"` : ''}>
                         <div style="font-size: 8px; opacity: 0.8;">${dayName}</div>
                         <div style="font-weight: 700;">${dayNum}</div>
                     </div>
@@ -1505,6 +1664,7 @@
             document.getElementById('syncToGoogle').checked = isSignedIn;
             document.getElementById('repeatDaily').checked = false;
             document.getElementById('repeatWeekly').checked = false;
+            document.getElementById('repeatMonthly').checked = false;
 
             document.getElementById('eventModal').classList.add('show');
             document.getElementById('eventTitle').focus();
@@ -1527,6 +1687,7 @@
             const syncToGoogle = document.getElementById('syncToGoogle').checked && isSignedIn;
             const repeatDaily = document.getElementById('repeatDaily').checked;
             const repeatWeekly = document.getElementById('repeatWeekly').checked;
+            const repeatMonthly = document.getElementById('repeatMonthly').checked;
 
             const eventData = {
                 title,
@@ -1534,7 +1695,8 @@
                 duration,
                 category: selectedCategory,
                 repeatDaily,
-                repeatWeekly
+                repeatWeekly,
+                repeatMonthly
             };
 
             // Save locally
@@ -1683,6 +1845,46 @@
             }
         }, 60000);
 
+        // ==================== PWA INSTALL ====================
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+
+            // Show install banner if not dismissed before
+            if (!localStorage.getItem('pwa_install_dismissed')) {
+                setTimeout(() => {
+                    document.getElementById('installBanner').classList.add('show');
+                }, 3000);
+            }
+        });
+
+        function installPWA() {
+            if (!deferredPrompt) {
+                showToast('App già installata o non supportata');
+                return;
+            }
+
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    showToast('App installata!');
+                }
+                deferredPrompt = null;
+                document.getElementById('installBanner').classList.remove('show');
+            });
+        }
+
+        function dismissInstallBanner() {
+            document.getElementById('installBanner').classList.remove('show');
+            localStorage.setItem('pwa_install_dismissed', 'true');
+        }
+
+        // Detect if running as PWA
+        window.addEventListener('appinstalled', () => {
+            showToast('App installata con successo!');
+            document.getElementById('installBanner').classList.remove('show');
+        });
+
         // ==================== INIT ====================
         // Load APIs
         window.onload = () => {
@@ -1699,6 +1901,13 @@
             // Check for offline mode preference
             if (localStorage.getItem('offline_mode') === 'true') {
                 useOfflineMode();
+            }
+
+            // Register Service Worker
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registered'))
+                    .catch(err => console.log('Service Worker registration failed:', err));
             }
 
             updateDisplay();
