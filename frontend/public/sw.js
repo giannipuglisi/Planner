@@ -1,6 +1,6 @@
 // Service Worker - Planner PWA
 // Minimal cache strategy: cache app shell, network-first for everything else
-const CACHE_VERSION = 'planner-v3.2.1';
+const CACHE_VERSION = 'planner-v3.3.0';
 const APP_SHELL = [
   './',
   './index.html',
@@ -32,6 +32,9 @@ self.addEventListener('fetch', event => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
+
+  // Never intercept our own API (auth/token broker): must always hit network
+  if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return;
 
   // Never intercept Google APIs / Auth
   if (
