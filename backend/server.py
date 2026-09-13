@@ -20,7 +20,9 @@ import httpx
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="Planner API", version="3.1.0")
+APP_VERSION = "3.3.0"
+
+app = FastAPI(title="Planner API", version=APP_VERSION)
 
 # CORS: allow the frontend origin (and any other configured origin)
 _cors_origins_env = os.environ.get("CORS_ORIGINS", "*")
@@ -43,12 +45,12 @@ class HealthResponse(BaseModel):
 
 @app.get("/api/", response_model=HealthResponse)
 async def root():
-    return HealthResponse(status="ok", service="planner-api", version="3.1.0")
+    return HealthResponse(status="ok", service="planner-api", version=APP_VERSION)
 
 
 @app.get("/api/health", response_model=HealthResponse)
 async def health():
-    return HealthResponse(status="ok", service="planner-api", version="3.1.0")
+    return HealthResponse(status="ok", service="planner-api", version=APP_VERSION)
 
 
 # ==================== GOOGLE OAUTH TOKEN BROKER ====================
@@ -70,6 +72,16 @@ GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 
 class ExchangeRequest(BaseModel):
     code: str
+
+
+class ConfigResponse(BaseModel):
+    """Diagnostics: lets the frontend verify it talks to a server that can
+    actually complete the OAuth exchange, and that both sides use the same
+    OAuth client. A client_id mismatch between browser and server is the
+    classic cause of an endless 'invalid_grant' loop."""
+    client_id: str
+    client_secret_configured: bool
+    version: str
 
 
 class RefreshRequest(BaseModel):
@@ -101,14 +113,33 @@ async def _post_to_google_token_endpoint(data: dict) -> dict:
             logger.error("Google token endpoint request failed: %s", e)
             raise HTTPException(status_code=502, detail="Impossibile contattare Google") from e
 
-    payload = resp.json()
+    try:
+        payload = resp.json()
+    except ValueError:
+        logger.error("Google token endpoint returned non-JSON (HTTP %s)", resp.status_code)
+        raise HTTPException(status_code=502, detail="Risposta non valida da Google")
+
     if resp.status_code != 200:
         error = payload.get("error", "unknown_error")
-        logger.warning("Google token endpoint returned error: %s", error)
+        description = payload.get("error_description")
+        logger.warning("Google token endpoint error: %s (%s)", error, description)
         # invalid_grant => refresh_token revoked/expired, frontend must re-login
         status_code = 401 if error == "invalid_grant" else 400
-        raise HTTPException(status_code=status_code, detail=error)
+        # The description names the actual misconfiguration
+        # (redirect_uri_mismatch, unauthorized_client, ...) instead of leaving
+        # the frontend with a bare error code nobody can act on.
+        detail = f"{error}: {description}" if description else error
+        raise HTTPException(status_code=status_code, detail=detail)
     return payload
+
+
+@app.get("/api/auth/google/config", response_model=ConfigResponse)
+async def google_config():
+    return ConfigResponse(
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret_configured=bool(GOOGLE_CLIENT_SECRET),
+        version=APP_VERSION,
+    )
 
 
 @app.post("/api/auth/google/exchange", response_model=TokenResponse)
