@@ -1386,14 +1386,17 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ code })
                 });
-                if (!response.ok) throw new Error('exchange failed ' + response.status);
+                if (!response.ok) {
+                    const errBody = await response.json().catch(() => null);
+                    throw new Error((errBody && errBody.detail) || ('exchange failed ' + response.status));
+                }
                 const data = await response.json();
                 storeToken(data);
                 gapi.client.setToken({ access_token: data.access_token });
                 handleSignedIn(true);
             } catch (e) {
                 console.error('Code exchange failed:', e);
-                showToast('Errore durante l\'accesso, riprova');
+                showToast('Errore durante l\'accesso: ' + (e.message || 'riprova'));
                 updateApiStatus('error', 'Errore auth');
             }
         }

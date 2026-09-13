@@ -1,6 +1,6 @@
 // Service Worker - Planner PWA
 // Minimal cache strategy: cache app shell, network-first for everything else
-const CACHE_VERSION = 'planner-v3.2.1';
+const CACHE_VERSION = 'planner-v3.2.2';
 const APP_SHELL = [
   './',
   './index.html',

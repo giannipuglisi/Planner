@@ -1168,7 +1168,7 @@
 
     <script>
         // ==================== CONFIGURATION ====================
-        const GOOGLE_CLIENT_ID = '838725539921-2otpkfdhppupskr2uikoqmaskuj7tu9e.apps.googleusercontent.com';
+        const GOOGLE_CLIENT_ID = '545488393108-ibhn8aahc7v8gngsoitmccn0l5dorp7d.apps.googleusercontent.com';
         const SCOPES = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.profile';
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
 
@@ -1182,7 +1182,7 @@
         let isSwiping = false;
         let suppressNextClick = false;
         let isSignedIn = false;
-        let tokenClient = null;
+        let codeClient = null;
         let gapiInited = false;
         let gisInited = false;
         let deferredPrompt = null;
@@ -1319,10 +1319,19 @@
 
         function gisLoaded() {
             try {
-                tokenClient = google.accounts.oauth2.initTokenClient({
+                codeClient = google.accounts.oauth2.initCodeClient({
                     client_id: GOOGLE_CLIENT_ID,
                     scope: SCOPES,
-                    callback: ''
+                    ux_mode: 'popup',
+                    callback: async (resp) => {
+                        if (!resp || resp.error || !resp.code) {
+                            console.error('Auth error:', resp);
+                            showToast('Errore accesso: ' + ((resp && (resp.error_description || resp.error)) || 'sconosciuto'));
+                            updateApiStatus('error', 'Errore auth');
+                            return;
+                        }
+                        await exchangeCodeForToken(resp.code);
+                    }
                 });
                 gisInited = true;
                 maybeEnableButtons();
@@ -1350,14 +1359,72 @@
         function storeToken(tokenResponse) {
             if (!tokenResponse || !tokenResponse.access_token) return;
             const expiresIn = parseInt(tokenResponse.expires_in || 3600, 10);
+            const existing = getStoredToken() || {};
             const data = {
                 access_token: tokenResponse.access_token,
                 token_type: tokenResponse.token_type || 'Bearer',
                 scope: tokenResponse.scope || SCOPES,
                 expires_in: expiresIn,
-                expires_at: Date.now() + (expiresIn * 1000) - 30000 // 30s safety buffer
+                expires_at: Date.now() + (expiresIn * 1000) - 30000, // 30s safety buffer
+                // Google only returns refresh_token on first consent; keep the
+                // previously stored one on subsequent exchanges/refreshes.
+                refresh_token: tokenResponse.refresh_token || existing.refresh_token || null
             };
             localStorage.setItem('google_token', JSON.stringify(data));
+        }
+
+        // ==================== BACKEND TOKEN BROKER ====================
+        // The client secret can never live in the browser, so the
+        // authorization-code exchange and the refresh_token renewal both go
+        // through our own backend (/api/auth/google/*). This is what makes
+        // the session survive for months instead of the ~1h access_token
+        // window, independent of the browser's Google cookies.
+        async function exchangeCodeForToken(code) {
+            try {
+                const response = await fetch('/api/auth/google/exchange', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                if (!response.ok) {
+                    const errBody = await response.json().catch(() => null);
+                    throw new Error((errBody && errBody.detail) || ('exchange failed ' + response.status));
+                }
+                const data = await response.json();
+                storeToken(data);
+                gapi.client.setToken({ access_token: data.access_token });
+                handleSignedIn(true);
+            } catch (e) {
+                console.error('Code exchange failed:', e);
+                showToast('Errore durante l\'accesso: ' + (e.message || 'riprova'));
+                updateApiStatus('error', 'Errore auth');
+            }
+        }
+
+        async function refreshAccessToken() {
+            const stored = getStoredToken();
+            if (!stored || !stored.refresh_token) return false;
+            try {
+                const response = await fetch('/api/auth/google/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: stored.refresh_token })
+                });
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        // refresh_token revoked/expired server-side: full re-login needed
+                        localStorage.removeItem('google_token');
+                    }
+                    return false;
+                }
+                const data = await response.json();
+                storeToken(data);
+                gapi.client.setToken({ access_token: data.access_token });
+                return true;
+            } catch (e) {
+                console.warn('Token refresh failed:', e);
+                return false;
+            }
         }
 
         function maybeEnableButtons() {
@@ -1389,8 +1456,22 @@
                         console.warn('Token restore failed:', e);
                         localStorage.removeItem('google_token');
                     }
+                } else if (stored && stored.expired && stored.refresh_token) {
+                    // Access token expired but we have a refresh_token: renew
+                    // silently via our backend, no interactive login needed.
+                    showCachedUserUI();
+                    updateApiStatus('syncing', 'Rinnovo sessione...');
+                    refreshAccessToken().then(ok => {
+                        if (ok) {
+                            handleSignedIn(false);
+                            updateApiStatus('online', 'Pronto');
+                        } else {
+                            updateApiStatus('error', 'Accesso richiesto');
+                            showToast('Accedi di nuovo per sincronizzare', 4000);
+                        }
+                    });
                 } else if (stored && stored.expired && cachedUser) {
-                    // Show last known user info, silently request new token on next API call
+                    // No refresh_token available: fall back to manual re-login
                     showCachedUserUI();
                     updateApiStatus('syncing', 'Token scaduto');
                     showToast('Sessione scaduta - accedi per sincronizzare', 4000);
@@ -1412,24 +1493,7 @@
                 showToast('Google API non ancora pronte, riprova...');
                 return;
             }
-
-            tokenClient.callback = async (resp) => {
-                if (resp.error !== undefined) {
-                    console.error('Auth error:', resp);
-                    showToast('Errore accesso: ' + (resp.error_description || resp.error));
-                    updateApiStatus('error', 'Errore auth');
-                    return;
-                }
-                storeToken(resp);
-                handleSignedIn(true);
-            };
-
-            const existingToken = gapi.client.getToken();
-            if (existingToken === null || !existingToken.access_token) {
-                tokenClient.requestAccessToken({ prompt: 'consent' });
-            } else {
-                tokenClient.requestAccessToken({ prompt: '' });
-            }
+            codeClient.requestCode();
         }
 
         async function handleSignedIn(fetchUser = true) {
@@ -1485,7 +1549,7 @@
         }
 
         // ==================== GOOGLE CALENDAR SYNC ====================
-        async function syncWithGoogle() {
+        async function syncWithGoogle(isRetry = false) {
             if (!isSignedIn) return;
             updateSyncStatus('syncing');
             showLoading(true);
@@ -1534,9 +1598,14 @@
                 rescheduleAllNotifications();
             } catch (e) {
                 console.error('Sync error:', e);
-                updateSyncStatus('error');
                 if (e.status === 401 || (e.result && e.result.error && e.result.error.code === 401)) {
-                    // Token truly expired - mark as expired but keep events cache + user_info
+                    if (!isRetry && (await refreshAccessToken())) {
+                        // Access token renewed via backend refresh_token, retry once
+                        showLoading(false);
+                        return syncWithGoogle(true);
+                    }
+                    // Refresh failed or already retried - mark as expired but keep events cache + user_info
+                    updateSyncStatus('error');
                     localStorage.removeItem('google_token');
                     isSignedIn = false;
                     updateApiStatus('error', 'Sessione scaduta');
@@ -1547,6 +1616,7 @@
                     document.getElementById('logoutSection').style.display = 'none';
                     document.getElementById('syncBtn').style.display = 'none';
                 } else {
+                    updateSyncStatus('error');
                     showToast('Errore rete, dati locali disponibili');
                 }
             }
