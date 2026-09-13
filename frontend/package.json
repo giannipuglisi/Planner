@@ -1,6 +1,6 @@
 {
   "name": "planner-pwa",
-  "version": "3.0.0",
+  "version": "3.3.0",
   "private": true,
   "description": "Planner - Organizzatore Settimanale (Static PWA)",
   "scripts": {
